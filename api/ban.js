@@ -57,17 +57,17 @@ export default async function handler(req, res) {
                 body: JSON.stringify(getAllUsersBody),
             });
 
-            // Log raw response from PlayFab
-            const rawUsersResult = await usersResponse.text();
-            console.log('Raw PlayFab GetAllUsers Response:', rawUsersResult);
+            const rawUsersResponse = await usersResponse.text();
+            console.log('Raw GetAllUsers Response:', rawUsersResponse);
 
             let usersResult;
             try {
-                usersResult = JSON.parse(rawUsersResult);
+                usersResult = JSON.parse(rawUsersResponse);
             } catch (err) {
-                console.error('Failed to parse PlayFab GetAllUsers response:', err.message);
-                return res.status(500).json({ error: 'Invalid response from PlayFab' });
+                console.error('Failed to parse GetAllUsers response:', err.message);
+                return res.status(500).json({ error: 'Invalid response from PlayFab', details: rawUsersResponse });
             }
+
 
             if (!usersResponse.ok) {
                 console.error('Error fetching users:', usersResult);
@@ -114,16 +114,15 @@ export default async function handler(req, res) {
             body: JSON.stringify(executeCloudScriptBody),
         });
 
-        // Log raw response from ExecuteCloudScript
-        const rawCloudScriptResult = await cloudScriptResponse.text();
-        console.log('Raw PlayFab ExecuteCloudScript Response:', rawCloudScriptResult);
+        const rawCloudScriptResponse = await cloudScriptResponse.text();
+        console.log('Raw ExecuteCloudScript Response:', rawCloudScriptResponse);
 
         let cloudScriptResult;
         try {
-            cloudScriptResult = JSON.parse(rawCloudScriptResult);
+            cloudScriptResult = JSON.parse(rawCloudScriptResponse);
         } catch (err) {
-            console.error('Failed to parse PlayFab ExecuteCloudScript response:', err.message);
-            return res.status(500).json({ error: 'Invalid response from PlayFab' });
+            console.error('Failed to parse ExecuteCloudScript response:', err.message);
+            return res.status(500).json({ error: 'Invalid response from PlayFab', details: rawCloudScriptResponse });
         }
 
         if (!cloudScriptResponse.ok) {
@@ -148,11 +147,11 @@ export default async function handler(req, res) {
 // Helper function to convert raw stream to string (used for parsing raw request body)
 function streamToString(stream) {
     return new Promise((resolve, reject) => {
-      let body = '';
-      stream.on('data', (chunk) => {
-        body += chunk.toString();
-      });
-      stream.on('end', () => resolve(body));
-      stream.on('error', (err) => reject(err));
+        let body = '';
+        stream.on('data', (chunk) => {
+            body += chunk.toString();
+        });
+        stream.on('end', () => resolve(body));
+        stream.on('error', (err) => reject(err));
     });
-  }
+}
