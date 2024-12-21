@@ -35,7 +35,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Missing customId' });
         }
 
-        console.warn('Received customId:', customId);
+        console.error('Received customId:', customId);
 
         // Step 1: Search for PlayFabId by customId using GetAllUsers
         let foundPlayFabId = null;
@@ -58,16 +58,16 @@ export default async function handler(req, res) {
             });
 
             const rawUsersResponse = await usersResponse.text();
-            console.warn('Raw GetAllUsers Response:', rawUsersResponse);
+            console.error('Raw GetAllUsers Response:', rawUsersResponse);
 
             let usersResult;
             try {
                 usersResult = JSON.parse(rawUsersResponse);
             } catch (err) {
                 console.error('Failed to parse GetAllUsers response:', err.message);
+                console.error('Raw response was:', rawUsersResponse);
                 return res.status(500).json({ error: 'Invalid response from PlayFab', details: rawUsersResponse });
             }
-
 
             if (!usersResponse.ok) {
                 console.error('Error fetching users:', usersResult);
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
             return res.status(404).json({ error: 'CustomId not found' });
         }
 
-        console.warn('Resolved PlayFabId:', foundPlayFabId);
+        console.error('Resolved PlayFabId:', foundPlayFabId);
 
         // Step 2: Call ExecuteCloudScript using the resolved PlayFabId
         const executeCloudScriptUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/ExecuteCloudScript`;
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
         });
 
         const rawCloudScriptResponse = await cloudScriptResponse.text();
-        console.warn('Raw ExecuteCloudScript Response:', rawCloudScriptResponse);
+        console.error('Raw ExecuteCloudScript Response:', rawCloudScriptResponse);
 
         let cloudScriptResult;
         try {
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
             });
         }
 
-        console.warn('Cloud Script Success:', cloudScriptResult);
+        console.error('Cloud Script Success:', cloudScriptResult);
         return res.status(200).json({
             success: true,
             data: cloudScriptResult.FunctionResult,
