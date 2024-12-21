@@ -35,7 +35,7 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Missing customId' });
         }
 
-        console.log('Received customId:', customId);
+        console.warn('Received customId:', customId);
 
         // Step 1: Search for PlayFabId by customId using GetAllUsers
         let foundPlayFabId = null;
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
             });
 
             const rawUsersResponse = await usersResponse.text();
-            console.log('Raw GetAllUsers Response:', rawUsersResponse);
+            console.warn('Raw GetAllUsers Response:', rawUsersResponse);
 
             let usersResult;
             try {
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
             return res.status(404).json({ error: 'CustomId not found' });
         }
 
-        console.log('Resolved PlayFabId:', foundPlayFabId);
+        console.warn('Resolved PlayFabId:', foundPlayFabId);
 
         // Step 2: Call ExecuteCloudScript using the resolved PlayFabId
         const executeCloudScriptUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/ExecuteCloudScript`;
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
         });
 
         const rawCloudScriptResponse = await cloudScriptResponse.text();
-        console.log('Raw ExecuteCloudScript Response:', rawCloudScriptResponse);
+        console.warn('Raw ExecuteCloudScript Response:', rawCloudScriptResponse);
 
         let cloudScriptResult;
         try {
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
             });
         }
 
-        console.log('Cloud Script Success:', cloudScriptResult);
+        console.warn('Cloud Script Success:', cloudScriptResult);
         return res.status(200).json({
             success: true,
             data: cloudScriptResult.FunctionResult,
