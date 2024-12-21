@@ -18,41 +18,58 @@ export default async function handler(req, res) {
 
     console.log('Received customId:', customId);
 
-    // Step 1: Resolve customId to PlayFabId
-    const getPlayerCombinedInfoUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/GetPlayerCombinedInfo`;
-    const getPlayerCombinedInfoBody = {
-      CustomId: customId,
-      InfoRequestParameters: {
-        GetUserAccountInfo: true,
-      },
-    };
+    // Step 1: Search for PlayFabId by customId using GetAllUsers
+    let foundPlayFabId = null;
+    let continuationToken = null;
 
-    const combinedInfoResponse = await fetch(getPlayerCombinedInfoUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-SecretKey': process.env.PLAYFAB_DEV_SECRET_KEY,
-      },
-      body: JSON.stringify(getPlayerCombinedInfoBody),
-    });
+    do {
+      const getAllUsersUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/GetAllUsers`;
+      const getAllUsersBody = {
+        StartPosition: continuationToken,
+        MaxResultsCount: 100 // Fetch up to 100 users per call
+      };
 
-    const combinedInfoResult = await combinedInfoResponse.json();
-
-    if (!combinedInfoResponse.ok) {
-      console.error('Error resolving customId to PlayFabId:', combinedInfoResult);
-      return res.status(combinedInfoResponse.status).json({
-        error: 'Error resolving customId to PlayFabId',
-        details: combinedInfoResult,
+      const usersResponse = await fetch(getAllUsersUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-SecretKey': process.env.PLAYFAB_DEV_SECRET_KEY,
+        },
+        body: JSON.stringify(getAllUsersBody),
       });
+
+      const usersResult = await usersResponse.json();
+
+      if (!usersResponse.ok) {
+        console.error('Error fetching users:', usersResult);
+        return res.status(usersResponse.status).json({
+          error: 'Error fetching users',
+          details: usersResult,
+        });
+      }
+
+      // Iterate through users to find the matching customId
+      for (const user of usersResult.Users) {
+        if (user.CustomId === customId) {
+          foundPlayFabId = user.PlayFabId;
+          break;
+        }
+      }
+
+      // Update the continuation token for the next batch of users
+      continuationToken = usersResult.ContinuationToken;
+    } while (continuationToken && !foundPlayFabId);
+
+    if (!foundPlayFabId) {
+      return res.status(404).json({ error: 'CustomId not found' });
     }
 
-    const playFabId = combinedInfoResult.data.UserAccountInfo.PlayFabId;
-    console.log('Resolved PlayFabId:', playFabId);
+    console.log('Resolved PlayFabId:', foundPlayFabId);
 
     // Step 2: Call ExecuteCloudScript using the resolved PlayFabId
     const executeCloudScriptUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/ExecuteCloudScript`;
     const executeCloudScriptBody = {
-      PlayFabId: playFabId,
+      PlayFabId: foundPlayFabId,
       FunctionName: 'GetBanInfoFromCustomId',
       FunctionParameter: { customId },
       GeneratePlayStreamEvent: false,
