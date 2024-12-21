@@ -1,5 +1,13 @@
 import fetch from 'node-fetch';
 
+export const config = {
+    api: {
+        bodyParser: {
+            sizeLimit: '1mb', // Optional: Increase body size limit if needed
+        },
+    },
+};
+
 export default async function handler(req, res) {
     try {
         // Set CORS headers
@@ -12,16 +20,15 @@ export default async function handler(req, res) {
             return res.status(405).json({ error: 'Method Not Allowed' });
         }
 
-        // Parse JSON body manually (for Vercel serverless functions)
+        // Parse request body manually
         let body;
         try {
-            body = JSON.parse(req.body || '{}'); // Default to an empty object if req.body is undefined
+            body = req.body ? req.body : JSON.parse(await streamToString(req)); // Handle JSON parsing for raw body
         } catch (err) {
             console.error('Failed to parse request body:', err.message);
             return res.status(400).json({ error: 'Invalid JSON in request body' });
         }
 
-        // Extract customId from the body
         const { customId } = body;
         if (!customId) {
             console.error('Missing customId in request body');
@@ -137,3 +144,15 @@ export default async function handler(req, res) {
         return res.status(500).json({ error: 'Internal Server Error', details: err.message });
     }
 }
+
+// Helper function to convert raw stream to string (used for parsing raw request body)
+function streamToString(stream) {
+    return new Promise((resolve, reject) => {
+      let body = '';
+      stream.on('data', (chunk) => {
+        body += chunk.toString();
+      });
+      stream.on('end', () => resolve(body));
+      stream.on('error', (err) => reject(err));
+    });
+  }
