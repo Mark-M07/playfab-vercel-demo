@@ -8,6 +8,41 @@ export const config = {
     },
 };
 
+async function getTitleData(titleId, secretKey) {
+    const response = await fetch(`https://${titleId}.playfabapi.com/Server/GetTitleData`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-SecretKey': secretKey
+        },
+        body: JSON.stringify({
+            Keys: ["idMappings"]
+        })
+    });
+    const data = await response.json();
+    try {
+        return JSON.parse(data.data.Data.idMappings || '{}');
+    } catch (e) {
+        console.error('Failed to parse idMappings:', e);
+        return {};
+    }
+}
+
+async function setTitleData(titleId, secretKey, mappings) {
+    const response = await fetch(`https://${titleId}.playfabapi.com/Server/SetTitleData`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-SecretKey': secretKey
+        },
+        body: JSON.stringify({
+            Key: "idMappings",
+            Value: JSON.stringify(mappings)
+        })
+    });
+    return response.json();
+}
+
 export default async function handler(req, res) {
     try {
         // Set CORS headers
@@ -15,12 +50,10 @@ export default async function handler(req, res) {
         res.setHeader('Access-Control-Allow-Methods', 'POST');
         res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
-        // Check for POST method
         if (req.method !== 'POST') {
             return res.status(405).json({ error: 'Method Not Allowed' });
         }
 
-        // Parse request body manually
         let body;
         try {
             body = req.body ? req.body : JSON.parse(await streamToString(req));
@@ -29,63 +62,70 @@ export default async function handler(req, res) {
             return res.status(400).json({ error: 'Invalid JSON in request body' });
         }
 
-        const { playFabId } = body;
-        if (!playFabId) {
-            console.error('Missing playFabId in request body');
-            return res.status(400).json({ error: 'Missing playFabId' });
-        }
+        const { action, customId, playFabId } = body;
 
-        console.error('Received playFabId:', playFabId);
+        // Handle different actions
+        switch (action) {
+            case 'store': {
+                if (!customId || !playFabId) {
+                    return res.status(400).json({ error: 'Missing customId or playFabId' });
+                }
 
-        // Call GetUserBans API directly
-        const getUserBansUrl = `https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/GetUserBans`;
-        const getUserBansBody = {
-            PlayFabId: playFabId
-        };
+                const mappings = await getTitleData(process.env.PLAYFAB_TITLE_ID, process.env.PLAYFAB_DEV_SECRET_KEY);
+                mappings[customId] = playFabId;
+                await setTitleData(process.env.PLAYFAB_TITLE_ID, process.env.PLAYFAB_DEV_SECRET_KEY, mappings);
 
-        const bansResponse = await fetch(getUserBansUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-SecretKey': process.env.PLAYFAB_DEV_SECRET_KEY,
-            },
-            body: JSON.stringify(getUserBansBody),
-        });
-
-        const rawBansResponse = await bansResponse.text();
-        console.error('Raw GetUserBans Response:', rawBansResponse);
-
-        let bansResult;
-        try {
-            bansResult = JSON.parse(rawBansResponse);
-        } catch (err) {
-            console.error('Failed to parse GetUserBans response:', err.message);
-            return res.status(500).json({ error: 'Invalid response from PlayFab', details: rawBansResponse });
-        }
-
-        if (!bansResponse.ok) {
-            console.error('Error fetching bans:', bansResult);
-            return res.status(bansResponse.status).json({
-                error: 'Error fetching bans',
-                details: bansResult,
-            });
-        }
-
-        // Filter to only return active bans and relevant information
-        const activeBans = (bansResult.data.BanData || []).filter(ban => ban.Active).map(ban => ({
-            reason: ban.Reason,
-            expires: ban.Expires,
-            created: ban.Created,
-            active: ban.Active
-        }));
-
-        console.error('Returning ban data:', activeBans);
-        return res.status(200).json({
-            success: true,
-            data: {
-                bans: activeBans
+                return res.status(200).json({
+                    success: true,
+                    message: 'Mapping stored successfully'
+                });
             }
-        });
+
+            case 'lookup': {
+                if (!customId) {
+                    return res.status(400).json({ error: 'Missing customId' });
+                }
+
+                const mappings = await getTitleData(process.env.PLAYFAB_TITLE_ID, process.env.PLAYFAB_DEV_SECRET_KEY);
+                const storedPlayFabId = mappings[customId];
+
+                if (!storedPlayFabId) {
+                    return res.status(404).json({ error: 'CustomId not found' });
+                }
+
+                // Get ban information
+                const bansResponse = await fetch(`https://${process.env.PLAYFAB_TITLE_ID}.playfabapi.com/Server/GetUserBans`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-SecretKey': process.env.PLAYFAB_DEV_SECRET_KEY,
+                    },
+                    body: JSON.stringify({ PlayFabId: storedPlayFabId }),
+                });
+
+                const bansResult = await bansResponse.json();
+
+                const activeBans = (bansResult.data.BanData || [])
+                    .filter(ban => ban.Active)
+                    .map(ban => ({
+                        reason: ban.Reason,
+                        expires: ban.Expires,
+                        created: ban.Created,
+                        active: ban.Active
+                    }));
+
+                return res.status(200).json({
+                    success: true,
+                    data: {
+                        playFabId: storedPlayFabId,
+                        bans: activeBans
+                    }
+                });
+            }
+
+            default:
+                return res.status(400).json({ error: 'Invalid action' });
+        }
 
     } catch (err) {
         console.error('Server error:', err);
@@ -93,7 +133,6 @@ export default async function handler(req, res) {
     }
 }
 
-// Helper function to convert raw stream to string
 function streamToString(stream) {
     return new Promise((resolve, reject) => {
         let body = '';
