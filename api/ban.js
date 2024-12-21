@@ -36,7 +36,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-SecretKey': process.env.PLAYFAB_DEV_SECRET_KEY // NOTE: from env
+        'X-SecretKey': process.env.PLAYFAB_DEV_SECRET_KEY
       },
       body: JSON.stringify(body)
     });
